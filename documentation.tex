@@ -1,0 +1,82 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+
+\title{American Option pricer via Binomial Tree}
+\author{Salvatore Stefanelli}
+\date{June 2021}
+
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage{amsmath}
+
+\begin{document}
+
+\maketitle
+
+\section{Model description}
+The presented pricer uses a recombining Binomial Tree to calculate the price of an American style stock option.\\
+\subsection{Assumptions}
+\begin{enumerate}
+    \item Constant Risk free rate $r$, constant volatility $\sigma$, constant dividend yield $q$.
+    \item Using a recombining binomial tree; the stock $S$ is only allowed to move up by a multiplicative quantity $u$ or down $d$ at any given time step $\Delta T$.
+    \item The CIR specification for the up and down movements is used. The up and down movements are assumed to be i.i.d. This implies the following formula for the upward multiplier $u$
+    \begin{align*}
+    u &= \exp\left(\sigma \cdot \sqrt{\Delta T}\right) \\
+    d &= 1 / u
+    \end{align*}
+\end{enumerate}
+
+\subsection{Methodology}
+The presence of a dividend yield $d$ modifies the usual calculation for the probability of upward $p$ and downward movement $q$ of the stock price. Denoting by $r$ the risk-free interest rate we have:
+\begin{align*}
+    a &= \exp\left((r - q)\Delta T \right) \\
+    p &= \frac{a - d}{u - d}  \\
+    q &= 1 - p
+\end{align*}
+\subsubsection{Stock tree construction}
+The recombining nature of the tree and the constant upward, down movement allow for a direct construction of any given layer of the tree using only the multiplier $u$ since $u\cdot d = 1$. For example at layer $4$ the vector of stock values will consist of $5$ elements:
+\[
+S_0u^4 \quad S_0u^2 \quad S_0 \quad S_0u^{-2} \quad S_0u^{-4} 
+\]
+where $S_0$ is the initial value for the stock.
+\subsubsection{Terminal value}
+In order to perform the backward induction algorithm used to value the option we first need to calculate the terminal value vector for the option at expiry. This is accomplished very simply by applying the payout function to the final layer of the stock tree. 
+\[
+Payout = \max \left( f \cdot (S_T - K), 0 \right)
+\]
+where $S_T$ is the terminal stock value, $K$ is the strike and $f$ is a flag equal to either $+1$ or $-1$ depending on the nature of the option; a Call or a Put.\\
+The inner value of the max function is referred to as \textbf{intrinsic value} $IV_i$ and it will be used below for the option valuation.
+\[
+IV_i = f\cdot(S_i - K)
+\]
+
+\subsubsection{Expected discounted value}
+Given the Americal exercise style of the option, at each node of the option tree we need to compute the expected discounted value of the option in order to determine the optimality of an exercise decision. This is accomplished for each layer of the tree as follows:
+\begin{equation}
+    EDV_i = (p\cdot Opt^u_{i+1} + q\cdot Opt^d_{i+1}) \cdot \exp(-r\cdot\Delta T)
+\end{equation}
+here we step backwards on the option tree taking the probability average of the two nodes $Opt^u$ and $Opt^d$ that stem from the point in the layer we are evaluating. The average is discounted using a single constant discount factor.
+
+\subsubsection{Option value}
+The value of the option at each point of the tree is then calculated by taking the max of the expected discounted value and the intrinsic value.
+\begin{equation}
+    Opt_i = \max(EDV_i, IV_i)
+\end{equation}
+
+The PV of the option will be the value of the node zero of the option tree.
+
+\vspace{3cm}
+
+\section{Implementation}
+The option pricer is implemented in C++ using only the standard library.\\
+Two classes are created: one that defined the Binomial tree and hosts the main valuation function, the second is meant to calculate the main sensitivities using the "bump and reval" approach and central differences 
+\begin{itemize}
+    \item stock Delta
+    \item IR Delta
+    \item Dividend Delta
+    \item Vega
+\end{itemize}
+The parameters are hard-coded in the \emph{main} function. This could be abstracted away in a config file or linked to a different data source.\\
+Second order greeks, such as Gamma could be easily added to the current set-up.\\
+Additional details are found in the code base.
+\end{document}
